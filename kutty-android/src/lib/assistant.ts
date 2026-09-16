@@ -12,8 +12,8 @@ export function plannerSnapshot(){return JSON.stringify(readSaved())}
 // Exact, read-only shortcuts never contact the AI provider or mutate the planner.
 export function localAnswer(text:string){
  const q=text.toLowerCase().replace(/[?!.,]/g,'').replace(/\s+/g,' ').trim();
- const tomorrow=/^(what can i make tomorrow|what(?: is|'s) (?:on )?tomorrow(?:s)? menu|tomorrow(?:s)? menu)$/.test(q);
- const today=/^(what(?: is|'s) (?:on )?today(?:s)? menu|today(?:s)? menu)$/.test(q);
+ const tomorrow=/^(what can i make tomorrow|what(?: is|'s) (?:on )?tomorrow(?:'?s)? menu|tomorrow(?:'?s)? menu)$/.test(q);
+ const today=/^(what(?: is|'s) (?:on )?today(?:'?s)? menu|today(?:'?s)? menu)$/.test(q);
  const prep=/^(what should i prepare tonight|what do i need to prepare tonight|tonights prep|prep for tomorrow)$/.test(q);
  if(!tomorrow&&!today&&!prep)return undefined;
  const s=readSaved(),date=addDays(todayIST(),today?0:1);
@@ -33,7 +33,7 @@ export function conversationContext(selectedDate:string,messages:ChatMessage[]=[
  const describe=(date:string)=>{const d=balancedDay(date,s.profile,s.overrides,s.rules,recipes);return {date,meals:d.rows.map(m=>({slot:m.slot,id:m.recipe?.id,locked:s.kitchen.locks.includes(date+'|'+m.slot)}))}};
  const last=messages.at(-1)?.text.toLowerCase()??'';
  const explicit=last.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
- const target=explicit&&/^\d{4}-\d{2}-\d{2}$/.test(explicit)&&!isNaN(Date.parse(explicit))?explicit:/tomorrow|tonight/.test(last)?addDays(today,1):/today/.test(last)?today:selectedDate;
+ const target=explicit&&explicit>=addDays(today,-7)&&explicit<=addDays(today,365)&&!isNaN(Date.parse(explicit))&&new Date(explicit).toISOString().slice(0,10)===explicit?explicit:/tomorrow|tonight/.test(last)?addDays(today,1):/today/.test(last)?today:selectedDate;
  const day=balancedDay(target,s.profile,s.overrides,s.rules,recipes);
  const recent=messages.slice(-8).map(m=>m.text+' '+(m.actions?.map(a=>a.recipeId).join(' ')??'')).join(' ').toLowerCase();
  const mentioned=recipes.filter(r=>recent.includes(r.name.toLowerCase())||new RegExp('\\b'+r.id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b').test(recent));

@@ -37,6 +37,8 @@ async function main(){
  const beforeLocal=storage;
  assert(localAnswer('What can I make tomorrow?')?.reply.includes('Tomorrow'));
  assert(localAnswer('What should I prepare tonight?'));
+ assert(localAnswer("What's tomorrow's menu?"));
+ assert.equal(conversationContext(todayIST(),[{id:'far',role:'user',text:'Plan 9999-12-31'}]).selectedDay.date,todayIST());
  assert.equal(localAnswer('Change tomorrow to idli'),undefined);
  assert.equal(localAnswer('What should I prepare for that?'),undefined,'Ambiguous follow-up needs conversation');
  assert.equal(storage,beforeLocal,'Local answers never mutate saved state');
