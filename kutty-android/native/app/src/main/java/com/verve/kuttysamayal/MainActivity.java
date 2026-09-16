@@ -20,6 +20,7 @@ import java.time.*;
 import java.util.*;
 
 public class MainActivity extends Activity {
+ private AssistantClient assistant;
  private WebView web;private TextToSpeech tts;private boolean ttsReady=false,active=false,wantListening=false,cooking=false,speaking=false,micPermissionPending=false;
  private SpeechRecognizer recognizer;private String exportData="",menuDate="";private final Handler handler=new Handler(Looper.getMainLooper());
  private final String APP_URL="https://appassets.androidplatform.net/assets/index.html";
@@ -38,6 +39,7 @@ public class MainActivity extends Activity {
    @Override public void onPageFinished(WebView view,String url){if(!menuDate.isEmpty())event("native-menu",json("date",menuDate));}
   });
   web.setWebChromeClient(new WebChromeClient(){@Override public void onPermissionRequest(PermissionRequest request){request.deny();}});
+  assistant=new AssistantClient(this,new AssistantClient.Callback(){public void result(String id,String text,String error){JSONObject d=json("id",id);try{d.put("text",text);d.put("error",error);}catch(JSONException ignored){}event("native-assistant",d);}public void configured(){event("native-ai-config",json("configured",assistant.configured()));}});
   web.addJavascriptInterface(new Bridge(),"Android");
   tts=new TextToSpeech(this,status->{ttsReady=status==TextToSpeech.SUCCESS;if(ttsReady){int available=tts.setLanguage(Locale.forLanguageTag("en-IN"));if(available<0)tts.setLanguage(Locale.ENGLISH);tts.setSpeechRate(.9f);}});
   tts.setOnUtteranceProgressListener(new UtteranceProgressListener(){public void onStart(String id){speaking=true;}public void onDone(String id){finishSpeech(false);}public void onError(String id){finishSpeech(true);}});
@@ -59,6 +61,11 @@ public class MainActivity extends Activity {
   try{recognizer.startListening(intent);screen();}catch(RuntimeException e){voiceError("could-not-start");}
  }
  class Bridge {
+  @JavascriptInterface public boolean assistantConfigured(){return assistant.configured();}
+  @JavascriptInterface public void configureAssistant(){assistant.configure();}
+  @JavascriptInterface public void askAssistant(String id,String payload){assistant.ask(id,payload);}
+  @JavascriptInterface public String readConversation(){return getSharedPreferences("assistant_chat",MODE_PRIVATE).getString("messages","");}
+  @JavascriptInterface public boolean writeConversation(String value){if(value.length()>2000000)return false;try{new JSONArray(value);}catch(JSONException e){return false;}return getSharedPreferences("assistant_chat",MODE_PRIVATE).edit().putString("messages",value).commit();}
   @JavascriptInterface public String readState(){return ReminderReceiver.prefs(MainActivity.this).getString("state","");}
   @JavascriptInterface public boolean writeState(String value){if(value.length()>2000000)return false;try{new JSONObject(value);}catch(JSONException e){return false;}return ReminderReceiver.prefs(MainActivity.this).edit().putString("state",value).commit();}
   @JavascriptInterface public boolean setReminders(String value){if(value.length()>4000000)return false;try{JSONArray rows=new JSONArray(value);if(rows.length()>400)return false;for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);r.getLong("at");r.getString("date");r.getString("body");}}catch(JSONException e){return false;}boolean saved=ReminderReceiver.prefs(MainActivity.this).edit().putString("reminders",value).commit();if(saved)runOnUiThread(()->ReminderReceiver.scheduleNext(MainActivity.this));return saved;}
@@ -72,7 +79,7 @@ public class MainActivity extends Activity {
   @JavascriptInterface public void finishListening(){runOnUiThread(()->{if(micPermissionPending){wantListening=false;return;}if(recognizer!=null&&wantListening)recognizer.stopListening();});}
   @JavascriptInterface public void stopListening(){runOnUiThread(MainActivity.this::stopListening);}
   @JavascriptInterface public boolean isSpeaking(){return speaking;}
-  @JavascriptInterface public void speak(String text){runOnUiThread(()->{if(!ttsReady){event("native-tts",json("kind","error"));return;}if(recognizer!=null)recognizer.cancel();speaking=true;int result=tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,"recipe");if(result==TextToSpeech.ERROR)finishSpeech(true);});}
+  @JavascriptInterface public void speak(String text){runOnUiThread(()->{if(!active)return;if(!ttsReady){event("native-tts",json("kind","error"));return;}if(recognizer!=null)recognizer.cancel();speaking=true;int result=tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,"recipe");if(result==TextToSpeech.ERROR)finishSpeech(true);});}
   @JavascriptInterface public void stopSpeaking(){runOnUiThread(()->{speaking=false;if(tts!=null)tts.stop();});}
   @JavascriptInterface public void keepAwake(boolean value){runOnUiThread(()->{cooking=value;screen();});}
   @JavascriptInterface public void exportBackup(String data){runOnUiThread(()->{if(data.length()>2000000){message("Backup too large.");return;}exportData=data;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"kutty-samayal-backup.json");startActivityForResult(save,20);});}
@@ -86,5 +93,5 @@ public class MainActivity extends Activity {
  @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null)return;try{if(request==20){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new IOException();out.write(exportData.getBytes(StandardCharsets.UTF_8));}exportData="";message("Backup saved.");}if(request==21){try(InputStream in=getContentResolver().openInputStream(data.getData());ByteArrayOutputStream out=new ByteArrayOutputStream()){if(in==null)throw new IOException();byte[] buffer=new byte[8192];int n,total=0;while((n=in.read(buffer))!=-1){total+=n;if(total>2000000)throw new IOException("Backup too large");out.write(buffer,0,n);}event("native-import",json("text",out.toString("UTF-8")));}}}catch(Exception e){event("native-import",json("error","Could not read or save the backup file."));}}
  private void handleBack(){web.evaluateJavascript("(()=>{const e=new Event('native-back',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented})()",v->{if(!"true".equals(v))finish();});}
  @Override public void onBackPressed(){handleBack();}
- @Override protected void onDestroy(){if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();if(web!=null){web.removeJavascriptInterface("Android");web.destroy();web=null;}super.onDestroy();}
+ @Override protected void onDestroy(){if(assistant!=null)assistant.destroy();if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();if(web!=null){web.removeJavascriptInterface("Android");web.destroy();web=null;}super.onDestroy();}
 }

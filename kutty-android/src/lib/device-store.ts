@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {answerSchema} from './assistant-contract';
 import {defaultProfile,recipes as defaults,slots,todayIST,addDays,ageMonths,type Recipe} from './recipes';
 import {allergens,recipeSchema} from './catalog';
 import {validateFrequencies} from './frequency';
@@ -32,6 +33,16 @@ export function importBackup(text:string){if(text.length>2000000)throw Error('Ba
 export async function localRequest(method:'GET'|'POST',body?:Record<string,any>){try{let s=readSaved();let message='Saved on this phone';if(method==='POST'){
  if(!body)throw Error('Missing change');const catalog=catalogFor(s);
  switch(body.type){
+ case 'assistantApply':{
+ if(body.snapshot!==JSON.stringify(s))throw Error('Your planner changed since this suggestion. Ask the assistant for an updated proposal.');
+ const actions=answerSchema.shape.actions.parse(body.actions);if(!actions.length)throw Error('No changes to apply');
+ const seen=new Set<string>();for(const a of actions){const target=a.type+'|'+(a.type==='meal'?a.date+'|'+a.slot:a.type==='frequency'?a.recipeId:a.ingredient);if(seen.has(target))throw Error('The suggestion contains conflicting changes. Ask for a new proposal.');seen.add(target);
+ if(a.type==='meal'){if(!s.onboarded||ageMonths(s.profile.dob,a.date!)<12)throw Error('This planner starts at 12 months.');if(a.date!<todayIST()||a.date!>addDays(todayIST(),365))throw Error('Choose a date within the coming year.');const k=a.date+'|'+a.slot;if(s.kitchen.locks.includes(k))throw Error('Unlock '+a.slot+' on '+a.date+' before changing it.');const r=catalog.find(r=>r.id===a.recipeId&&r.slot===a.slot);if(!r||r.allergens.some(x=>s.profile.allergies.includes(x as any)))throw Error('A proposed dish is unavailable or excluded by an allergen.');s.overrides[k]=r.id;
+ }else if(a.type==='frequency'){if(!catalog.some(r=>r.id===a.recipeId))throw Error('Dish not found');if(a.frequency==='rotation')delete s.rules[a.recipeId!];else s.rules[a.recipeId!]={kind:a.frequency!,startsOn:todayIST()};
+ }else{if(!namesFor(catalog).includes(a.ingredient!))throw Error('Ingredient not found');s.kitchen.pantry=s.kitchen.pantry.filter(n=>n!==a.ingredient);if(a.available)s.kitchen.pantry.push(a.ingredient!)}
+ }
+ const issue=validateFrequencies(todayIST(),s.profile,catalog,s.rules);if(issue)throw Error(issue);message='Approved changes saved. Menu, shopping list and reminders updated.';break;
+ }
  case 'dishNames':{const names=schema.shape.dishNames.parse(body.names);s.dishNames=names.filter((n,i)=>names.findIndex(x=>x.toLowerCase()===n.toLowerCase())===i);message='Your dish list is saved';break;}
  case 'profile':s.profile={...s.profile,...schema.shape.profile.omit({anchor:true}).parse(body.profile)};if(s.profile.dob>todayIST())throw Error('Birth date cannot be in the future.');s.onboarded=true;break;
  case 'override':{date.parse(body.date);if(!slots.includes(body.slot))throw Error('Invalid meal');const key=body.date+'|'+body.slot;if(s.kitchen.locks.includes(key))throw Error('Unlock this meal first.');if(body.recipeId){const r=catalog.find(r=>r.id===body.recipeId&&r.slot===body.slot);if(!r||r.allergens.some(a=>s.profile.allergies.includes(a as any)))throw Error('Choose a suitable dish.');s.overrides[key]=r.id}else delete s.overrides[key];break;}

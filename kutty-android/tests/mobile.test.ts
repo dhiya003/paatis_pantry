@@ -20,6 +20,16 @@ async function main(){
  await change({type:'dishNames',names});assert.deepEqual(readSaved().dishNames,names);assert.equal(matchDish('Keerai sadam',catalogFor(readSaved()))?.id,'keerai');assert.equal(matchDish('Family special',catalogFor(readSaved())),undefined);
  importBackup(exportBackup());assert.deepEqual(readSaved().dishNames,names);
  assert.equal(catalogFor(readSaved()).length,40);for(const r of catalogFor(readSaved()))assert(recipeSchema.safeParse(r).success,r.name);
+ const empty={date:null,slot:null,recipeId:null,frequency:null,ingredient:null,available:null};
+ const proposed=[{...empty,type:'meal',date,slot:'Breakfast',recipeId:'pongal'}];
+ const initialSnapshot=JSON.stringify(readSaved());
+ await change({type:'assistantApply',snapshot:initialSnapshot,actions:proposed});assert.equal(readSaved().overrides[date+'|Breakfast'],'pongal');
+ const afterApplied=storage;assert.equal((await localRequest('POST',{type:'assistantApply',snapshot:initialSnapshot,actions:proposed})).status,400);assert.equal(storage,afterApplied);
+ await change({type:'lock',date,slot:'Breakfast',recipeId:'pongal',locked:true});const locked=storage;
+ assert.equal((await localRequest('POST',{type:'assistantApply',snapshot:JSON.stringify(readSaved()),actions:[{...empty,type:'pantry',ingredient:'Rice',available:true},...proposed]})).status,400);assert.equal(storage,locked,'Batch must be atomic when a later change is blocked');
+ await change({type:'lock',date,slot:'Breakfast',recipeId:'pongal',locked:false});
+ await change({type:'profile',profile:{name:'Test baby',dob:'2024-01-01',allergies:['Milk']}});const allergic=storage;
+ assert.equal((await localRequest('POST',{type:'assistantApply',snapshot:JSON.stringify(readSaved()),actions:proposed})).status,400);assert.equal(storage,allergic);
  const state=readSaved();assert(balancedDay(date,state.profile,state.overrides,state.rules,catalogFor(state)).rows.length===4);
  console.log('PASS offline persistence, IST reminder dates, ingredients, locks, custom recipes, remove/restore and backup import');
 }
