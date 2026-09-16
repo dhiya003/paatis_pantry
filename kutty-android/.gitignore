@@ -1,0 +1,7 @@
+node_modules/
+dist/
+native/.gradle/
+native/**/build/
+native/app/src/main/assets/
+native/local.properties
+android-preview.png
