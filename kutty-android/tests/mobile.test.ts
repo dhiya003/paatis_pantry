@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import {localRequest,readSaved,catalogFor,exportBackup,importBackup} from '../lib/device-store';
 import {parseDishNames,matchDish} from '../lib/dish-names';
 import {recipeSchema} from '../lib/catalog';
+import {localAnswer,conversationContext,compactHistory} from '../lib/assistant';
+import {todayIST,addDays} from '../lib/recipes';
+import {prepTasks,shoppingList} from '../lib/kitchen';
 import {balancedDay} from '../lib/balance';
 let storage='',reminders:any[]=[];
 (globalThis as any).window={Android:{readState:()=>storage,writeState:(s:string)=>{storage=s;return true},setReminders:(s:string)=>{reminders=JSON.parse(s);return true}}};
@@ -31,6 +34,28 @@ async function main(){
  await change({type:'profile',profile:{name:'Test baby',dob:'2024-01-01',allergies:['Milk']}});const allergic=storage;
  assert.equal((await localRequest('POST',{type:'assistantApply',snapshot:JSON.stringify(readSaved()),actions:proposed})).status,400);assert.equal(storage,allergic);
  const state=readSaved();assert(balancedDay(date,state.profile,state.overrides,state.rules,catalogFor(state)).rows.length===4);
+ const beforeLocal=storage;
+ assert(localAnswer('What can I make tomorrow?')?.reply.includes('Tomorrow'));
+ assert(localAnswer('What should I prepare tonight?'));
+ assert.equal(localAnswer('Change tomorrow to idli'),undefined);
+ assert.equal(localAnswer('What should I prepare for that?'),undefined,'Ambiguous follow-up needs conversation');
+ assert.equal(storage,beforeLocal,'Local answers never mutate saved state');
+ const today=todayIST(),catalog=catalogFor(state);
+ const detail=(d:string)=>{const day=balancedDay(d,state.profile,state.overrides,state.rules,catalog);return {date:d,meals:day.rows,sides:day.additions,ingredients:day.ingredients,prep:prepTasks(day.rows)}};
+ const oldContext={recipes:catalog,recentAndUpcoming:Array.from({length:16},(_,i)=>detail(addDays(today,i-1))),selectedDay:detail(today),weeklyShopping:shoppingList(today,state.profile,state.overrides,state.rules,catalog)};
+ const context=conversationContext(today,[{id:'q',role:'user',text:'How do I cook idli tomorrow?'}]);
+ assert(context.recipeDetails.some(r=>r.id==='idli'));
+ assert(context.allergenExclusions.includes('Milk'));
+ assert.equal(context.recipes.length,40);
+ assert(!JSON.stringify(context).includes('Test baby'));
+ assert(!context.recipes.some(r=>'steps' in r));
+ // Compare against the old payload without duplicating full meal recipes.
+ const oldSlim={...oldContext,recentAndUpcoming:oldContext.recentAndUpcoming.map(d=>({...d,meals:d.meals.map(m=>({slot:m.slot,id:m.recipe?.id,name:m.recipe?.name,locked:false}))})),selectedDay:{...oldContext.selectedDay,meals:oldContext.selectedDay.meals.map(m=>({slot:m.slot,id:m.recipe?.id,name:m.recipe?.name,locked:false}))}};
+ const oldSize=JSON.stringify(oldSlim).length,newSize=JSON.stringify(context).length;
+ assert(newSize<oldSize*0.55,`Compact context must be substantially smaller: ${newSize}/${oldSize}`);
+ const bounded=compactHistory(Array.from({length:30},(_,i)=>({id:String(i),role:i%2?'assistant' as const:'user' as const,text:'x'.repeat(3000)})));
+ assert(bounded.length<=8);assert(JSON.stringify(bounded).length<=12000);
+ console.log(`PASS local answers, follow-up routing, privacy, bounded history; planner context ${oldSize} → ${newSize} characters`);
  console.log('PASS offline persistence, IST reminder dates, ingredients, locks, custom recipes, remove/restore and backup import');
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
