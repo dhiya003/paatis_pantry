@@ -25,4 +25,22 @@ public class AppSmokeTest {
  }
  assertNotNull(c.getSystemService(android.app.NotificationManager.class).getNotificationChannel(ReminderReceiver.CHANNEL));
  }
+ @Test public void nativeBackReturnsToPreviousScreen()throws Exception {
+ Context c=ApplicationProvider.getApplicationContext();
+ String seed="{\"version\":1,\"onboarded\":true,\"profile\":{\"name\":\"Test baby\",\"dob\":\"2024-01-01\",\"anchor\":\"2026-09-16\",\"allergies\":[]},\"rules\":{},\"overrides\":{},\"kitchen\":{\"pantry\":[],\"favourites\":[],\"locks\":[],\"prepDone\":[]},\"changes\":{},\"removedIds\":[]}";
+ ReminderReceiver.prefs(c).edit().clear().putString("state",seed).commit();
+ try(ActivityScenario<MainActivity> app=ActivityScenario.launch(MainActivity.class)){
+ boolean ready=false;for(int i=0;i<40;i++){if(evaluate(app,"document.body.innerText.includes('A happy little mealtime')").equals("true")){ready=true;break;}Thread.sleep(500);}assertTrue(ready);
+ evaluate(app,"Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='My dish list').click()");Thread.sleep(500);
+ assertEquals("true",evaluate(app,"document.body.innerText.includes('Save my dish list')"));
+ app.onActivity(a->a.onBackPressed());Thread.sleep(500);
+ assertEquals("true",evaluate(app,"document.body.innerText.includes('A happy little mealtime')"));
+ evaluate(app,"document.querySelector('.meal-title').click()");Thread.sleep(500);
+ assertEquals("true",evaluate(app,"!!document.querySelector('[role=dialog]')"));app.onActivity(a->a.onBackPressed());Thread.sleep(500);
+ assertEquals("false",evaluate(app,"!!document.querySelector('[role=dialog]')"));
+ assertEquals("true",evaluate(app,"!!document.querySelector('.voice-mic') && !document.body.innerText.includes('Start listening')"));
+ assertEquals("true",evaluate(app,"document.body.scrollWidth <= window.innerWidth + 1"));
+ }
+ }
+
 }

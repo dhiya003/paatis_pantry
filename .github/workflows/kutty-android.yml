@@ -32,6 +32,12 @@ jobs:
           npm run build
           mkdir -p native/app/src/main/assets
           cp -R dist/. native/app/src/main/assets/
+      - name: Check mobile navigation and hold-to-talk
+        run: |
+          npm install --no-save --package-lock=false playwright@1.58.2
+          npx playwright install --with-deps chromium
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist &
+          node scripts/ui-check.cjs
       - name: Build installable APK and Android tests
         run: gradle -p native assembleDebug assembleDebugAndroidTest --no-daemon
       - name: Upload installable APK
@@ -68,5 +74,6 @@ jobs:
           path: |
             kutty-android/native/app/build/reports/androidTests
             kutty-android/android-preview.png
+            kutty-android/ui-*.png
             kutty-android/package-lock.json
           retention-days: 14

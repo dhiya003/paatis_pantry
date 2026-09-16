@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
  private void message(String text){event("native-message",json("message",text));}
  private JSONObject voiceDetail(String error){JSONObject o=json("kind","error");try{o.put("error",error);}catch(JSONException ignored){}return o;}
  private void voiceError(String error){wantListening=false;event("native-voice",voiceDetail(error));}
- @Override public void onCreate(Bundle state){super.onCreate(state);ReminderReceiver.channel(this);web=new WebView(this);web.setBackgroundColor(Color.rgb(248,246,255));setContentView(web);
+ @Override public void onCreate(Bundle state){super.onCreate(state);if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,this::handleBack);ReminderReceiver.channel(this);web=new WebView(this);web.setBackgroundColor(Color.rgb(248,246,255));setContentView(web);
   web.setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());v.setPadding(bars.left,bars.top,bars.right,bars.bottom);}else v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
   WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setMediaPlaybackRequiresUserGesture(false);settings.setSupportMultipleWindows(false);
   final WebViewAssetLoader loader=new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
   tts.setOnUtteranceProgressListener(new UtteranceProgressListener(){public void onStart(String id){speaking=true;}public void onDone(String id){finishSpeech(false);}public void onError(String id){finishSpeech(true);}});
   menuDate=getIntent().getStringExtra("menuDate");if(menuDate==null)menuDate="";web.loadUrl(APP_URL);ReminderReceiver.scheduleNext(this);
  }
- private void finishSpeech(boolean error){runOnUiThread(()->{speaking=false;event("native-tts",json("kind",error?"error":"end"));if(wantListening&&active)handler.postDelayed(this::listen,350);});}
+ private void finishSpeech(boolean error){runOnUiThread(()->{speaking=false;event("native-tts",json("kind",error?"error":"end"));});}
  private void screen(){if(cooking||wantListening)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
  private void stopListening(){wantListening=false;if(recognizer!=null)recognizer.cancel();screen();}
  private void listen(){
@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
   if(recognizer==null){recognizer=SpeechRecognizer.createSpeechRecognizer(this);recognizer.setRecognitionListener(new RecognitionListener(){
    public void onReadyForSpeech(Bundle b){}public void onBeginningOfSpeech(){}public void onRmsChanged(float rms){}public void onBufferReceived(byte[] b){}public void onEndOfSpeech(){}public void onPartialResults(Bundle b){}public void onEvent(int type,Bundle b){}
    public void onError(int error){if(!wantListening||speaking)return;voiceError(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS?"not-allowed":error==SpeechRecognizer.ERROR_NO_MATCH||error==SpeechRecognizer.ERROR_SPEECH_TIMEOUT?"no-speech":"speech-service-"+error);screen();}
-   public void onResults(Bundle b){if(!wantListening||speaking)return;ArrayList<String> words=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(words!=null&&!words.isEmpty()){JSONObject obj=json("kind","result");try{obj.put("text",words.get(0));}catch(JSONException ignored){}event("native-voice",obj);}event("native-voice",json("kind","end"));}
+   public void onResults(Bundle b){if(!wantListening||speaking)return;ArrayList<String> words=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(words!=null&&!words.isEmpty()){JSONObject obj=json("kind","result");try{obj.put("text",words.get(0));}catch(JSONException ignored){}event("native-voice",obj);}wantListening=false;screen();event("native-voice",json("kind","end"));}
   });}
   Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE,"en-IN").putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,false).putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,1);
   try{recognizer.startListening(intent);screen();}catch(RuntimeException e){voiceError("could-not-start");}
@@ -68,7 +68,8 @@ public class MainActivity extends Activity {
   @JavascriptInterface public void openNotificationSettings(){runOnUiThread(()->startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));}
   @JavascriptInterface public void testNotification(){runOnUiThread(()->{if(!getSystemService(NotificationManager.class).areNotificationsEnabled()){message("Enable notifications first.");return;}ReminderReceiver.show(MainActivity.this,LocalDate.now(ZoneId.of("Asia/Kolkata")).plusDays(1).toString(),true);message("Test notification sent. Pull down your notification shade.");});}
   @JavascriptInterface public boolean voiceAvailable(){return SpeechRecognizer.isRecognitionAvailable(MainActivity.this);}
-  @JavascriptInterface public void startListening(){runOnUiThread(()->{wantListening=true;handler.postDelayed(MainActivity.this::listen,250);});}
+  @JavascriptInterface public void startListening(){runOnUiThread(()->{wantListening=true;listen();});}
+  @JavascriptInterface public void finishListening(){runOnUiThread(()->{if(micPermissionPending){wantListening=false;return;}if(recognizer!=null&&wantListening)recognizer.stopListening();});}
   @JavascriptInterface public void stopListening(){runOnUiThread(MainActivity.this::stopListening);}
   @JavascriptInterface public boolean isSpeaking(){return speaking;}
   @JavascriptInterface public void speak(String text){runOnUiThread(()->{if(!ttsReady){event("native-tts",json("kind","error"));return;}if(recognizer!=null)recognizer.cancel();speaking=true;int result=tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,"recipe");if(result==TextToSpeech.ERROR)finishSpeech(true);});}
@@ -81,8 +82,9 @@ public class MainActivity extends Activity {
  @Override protected void onResume(){super.onResume();active=true;if(web!=null)event("native-resume",new JSONObject());ReminderReceiver.scheduleNext(this);}
  @Override protected void onPause(){active=false;if(!micPermissionPending)stopListening();if(tts!=null)tts.stop();speaking=false;if(!micPermissionPending)event("native-voice",voiceDetail("app-in-background"));super.onPause();}
  @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);menuDate=i.getStringExtra("menuDate");if(menuDate!=null)event("native-menu",json("date",menuDate));}
- @Override public void onRequestPermissionsResult(int request,String[] names,int[] grants){super.onRequestPermissionsResult(request,names,grants);if(request==9){micPermissionPending=false;if(grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED){wantListening=true;handler.postDelayed(this::listen,400);}else voiceError("not-allowed");}if(request==10){ReminderReceiver.scheduleNext(this);event("native-resume",new JSONObject());}}
+ @Override public void onRequestPermissionsResult(int request,String[] names,int[] grants){super.onRequestPermissionsResult(request,names,grants);if(request==9){micPermissionPending=false;if(grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED){wantListening=false;event("native-voice",voiceDetail("permission-granted"));}else voiceError("not-allowed");}if(request==10){ReminderReceiver.scheduleNext(this);event("native-resume",new JSONObject());}}
  @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null)return;try{if(request==20){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new IOException();out.write(exportData.getBytes(StandardCharsets.UTF_8));}exportData="";message("Backup saved.");}if(request==21){try(InputStream in=getContentResolver().openInputStream(data.getData());ByteArrayOutputStream out=new ByteArrayOutputStream()){if(in==null)throw new IOException();byte[] buffer=new byte[8192];int n,total=0;while((n=in.read(buffer))!=-1){total+=n;if(total>2000000)throw new IOException("Backup too large");out.write(buffer,0,n);}event("native-import",json("text",out.toString("UTF-8")));}}}catch(Exception e){event("native-import",json("error","Could not read or save the backup file."));}}
- @Override public void onBackPressed(){web.evaluateJavascript("(()=>{const d=document.querySelector('[data-slot=dialog-close], [data-slot=sheet-close]');if(d){d.click();return true}return false})()",v->{if(!"true".equals(v))super.onBackPressed();});}
+ private void handleBack(){web.evaluateJavascript("(()=>{const e=new Event('native-back',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented})()",v->{if(!"true".equals(v))finish();});}
+ @Override public void onBackPressed(){handleBack();}
  @Override protected void onDestroy(){if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();if(web!=null){web.removeJavascriptInterface("Android");web.destroy();web=null;}super.onDestroy();}
 }

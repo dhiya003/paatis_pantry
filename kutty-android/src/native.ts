@@ -1,11 +1,12 @@
 declare global {
- interface Window {Android?:{readState():string;writeState(data:string):boolean;setReminders(data:string):boolean;notificationStatus():string;enableNotifications():void;openAlarmSettings():void;openNotificationSettings():void;testNotification():void;voiceAvailable():boolean;startListening():void;stopListening():void;speak(text:string):void;stopSpeaking():void;isSpeaking():boolean;keepAwake(value:boolean):void;exportBackup(data:string):void;importBackup():void};SpeechRecognition?:new()=>any;webkitSpeechRecognition?:new()=>any;}
+ interface Window {Android?:{readState():string;writeState(data:string):boolean;setReminders(data:string):boolean;notificationStatus():string;enableNotifications():void;openAlarmSettings():void;openNotificationSettings():void;testNotification():void;voiceAvailable():boolean;startListening():void;stopListening():void;finishListening():void;speak(text:string):void;stopSpeaking():void;isSpeaking():boolean;keepAwake(value:boolean):void;exportBackup(data:string):void;importBackup():void};SpeechRecognition?:new()=>any;webkitSpeechRecognition?:new()=>any;}
 }
 if(window.Android){
  const native=window.Android;
  class NativeRecognition {lang='en-IN';continuous=true;interimResults=false;onresult:((e:any)=>void)|null=null;onend:(()=>void)|null=null;onerror:((e:any)=>void)|null=null;private subscribed=false;
  private listener=(event:Event)=>{const d=(event as CustomEvent).detail;if(d.kind==='result')this.onresult?.({resultIndex:0,results:[{isFinal:true,0:{transcript:d.text}}]});if(d.kind==='end')this.onend?.();if(d.kind==='error')this.onerror?.({error:d.error});};
  start(){if(!this.subscribed){window.addEventListener('native-voice',this.listener);this.subscribed=true}native.startListening()}
+ stop(){native.finishListening()}
  abort(){native.stopListening();if(this.subscribed){window.removeEventListener('native-voice',this.listener);this.subscribed=false}}
  }
  if(native.voiceAvailable())window.SpeechRecognition=NativeRecognition;

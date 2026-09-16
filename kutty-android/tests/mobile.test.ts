@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {localRequest,readSaved,catalogFor,exportBackup,importBackup} from '../lib/device-store';
+import {parseDishNames,matchDish} from '../lib/dish-names';
+import {recipeSchema} from '../lib/catalog';
 import {balancedDay} from '../lib/balance';
 let storage='',reminders:any[]=[];
 (globalThis as any).window={Android:{readState:()=>storage,writeState:(s:string)=>{storage=s;return true},setReminders:(s:string)=>{reminders=JSON.parse(s);return true}}};
@@ -13,6 +15,11 @@ async function main(){
  await change({type:'recipeRemove',recipeId:'idli',removed:false});assert.equal(catalogFor(readSaved()).find(r=>r.id==='idli')?.name,'Test idli');
  const backup=exportBackup();await change({type:'flag',kind:'pantry',key:'Rice',checked:true});importBackup(backup);assert(!readSaved().kitchen.pantry.includes('Rice'));
  const before=storage;const bad=await localRequest('POST',{type:'recipeSave',recipe:{...r,source:'javascript:bad'}});assert.equal(bad.status,400);assert.equal(storage,before);
+ const old=JSON.parse(backup);delete old.dishNames;importBackup(JSON.stringify(old));assert.deepEqual(readSaved().dishNames,[]);
+ const names=parseDishNames('Idli, Idli\nKeerai sadam; Family special');assert.deepEqual(names,['Idli','Keerai sadam','Family special']);
+ await change({type:'dishNames',names});assert.deepEqual(readSaved().dishNames,names);assert.equal(matchDish('Keerai sadam',catalogFor(readSaved()))?.id,'keerai');assert.equal(matchDish('Family special',catalogFor(readSaved())),undefined);
+ importBackup(exportBackup());assert.deepEqual(readSaved().dishNames,names);
+ assert.equal(catalogFor(readSaved()).length,40);for(const r of catalogFor(readSaved()))assert(recipeSchema.safeParse(r).success,r.name);
  const state=readSaved();assert(balancedDay(date,state.profile,state.overrides,state.rules,catalogFor(state)).rows.length===4);
  console.log('PASS offline persistence, IST reminder dates, ingredients, locks, custom recipes, remove/restore and backup import');
 }
