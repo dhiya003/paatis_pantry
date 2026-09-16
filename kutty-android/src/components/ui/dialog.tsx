@@ -51,9 +51,11 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  floating,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  floating?: React.ReactNode
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -66,7 +68,8 @@ function DialogContent({
         )}
         {...props}
       >
-        {children}
+        {floating ? <div className="dialog-body">{children}</div> : children}
+        {floating}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
@@ -98,6 +101,7 @@ function DialogFooter({
   ...props
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
+  floating?: React.ReactNode
 }) {
   return (
     <div
