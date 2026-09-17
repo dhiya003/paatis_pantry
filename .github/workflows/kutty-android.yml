@@ -38,8 +38,12 @@ jobs:
           npx playwright install --with-deps chromium
           python3 -m http.server 4173 --bind 127.0.0.1 --directory dist &
           node scripts/ui-check.cjs
+      - name: Bundle local wake-word engine
+        run: |
+          python3 -m pip install sentencepiece==0.2.1
+          python3 scripts/prepare-wake.py
       - name: Build installable APK and Android tests
-        run: gradle -p native assembleDebug assembleDebugAndroidTest --no-daemon
+        run: gradle -p native testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
