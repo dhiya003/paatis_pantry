@@ -32,17 +32,12 @@ jobs:
           npm run build
           mkdir -p native/app/src/main/assets
           cp -R dist/. native/app/src/main/assets/
-      - name: Check mobile navigation and hold-to-talk
+      - name: Check mobile layout and navigation
         run: |
           npm install --no-save --package-lock=false playwright@1.58.2
           npx playwright install --with-deps chromium
           python3 -m http.server 4173 --bind 127.0.0.1 --directory dist &
           node scripts/ui-check.cjs
-      - name: Bundle local wake-word engine
-        run: |
-          python3 -m pip install sherpa-onnx==1.13.8 piper-tts==1.4.2 numpy==2.2.6
-          python3 scripts/prepare-wake.py
-          python3 scripts/wake-acoustic-check.py
       - name: Build installable APK and Android tests
         run: gradle -p native testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon
       - name: Upload installable APK
@@ -81,5 +76,4 @@ jobs:
             kutty-android/android-preview.png
             kutty-android/ui-*.png
             kutty-android/package-lock.json
-            kutty-android/wake-acoustic-results.json
           retention-days: 14

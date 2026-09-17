@@ -18,8 +18,8 @@ public class AppSmokeTest {
  try(ActivityScenario<MainActivity> app=ActivityScenario.launch(MainActivity.class)){
  boolean ready=false;for(int i=0;i<30;i++){if(evaluate(app,"document.body.innerText.includes('Save details')").equals("true")){ready=true;break;}Thread.sleep(500);}assertTrue("Bundled offline UI should show profile setup",ready);
  assertEquals("true",evaluate(app,"typeof Android !== 'undefined'"));
- assertEquals("true",evaluate(app,"typeof Android.askAssistant === 'function' && typeof Android.configureAssistant === 'function'"));
- assertEquals("false",evaluate(app,"Android.assistantConfigured()"));
+ assertEquals("true",evaluate(app,"typeof Android.askAssistant === 'undefined' && typeof Android.startHandsfree === 'undefined'"));
+
  assertEquals("true",evaluate(app,"Android.writeState(JSON.stringify({test:'persisted'}))"));
  assertEquals("true",evaluate(app,"JSON.parse(Android.readState()).test === 'persisted'"));
  assertEquals("true",evaluate(app,"document.body.scrollWidth <= window.innerWidth + 1"));
@@ -41,7 +41,7 @@ public class AppSmokeTest {
  evaluate(app,"document.querySelector('.meal-title').click()");Thread.sleep(500);
  assertEquals("true",evaluate(app,"!!document.querySelector('[role=dialog]')"));app.onActivity(a->a.onBackPressed());Thread.sleep(500);
  assertEquals("false",evaluate(app,"!!document.querySelector('[role=dialog]')"));
- assertEquals("true",evaluate(app,"!!document.querySelector('.voice-mic') && !document.body.innerText.includes('Start listening')"));
+ assertEquals("true",evaluate(app,"!document.querySelector('.voice-mic') && !document.body.innerText.includes('Start listening')"));
  assertEquals("true",evaluate(app,"document.body.scrollWidth <= window.innerWidth + 1"));
  }
  }
