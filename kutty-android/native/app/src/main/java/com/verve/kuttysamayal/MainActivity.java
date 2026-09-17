@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
   web.setWebChromeClient(new WebChromeClient(){@Override public void onPermissionRequest(PermissionRequest request){request.deny();}});
   assistant=new AssistantClient(this,new AssistantClient.Callback(){public void result(String id,String text,String error){JSONObject d=json("id",id);try{d.put("text",text);d.put("error",error);}catch(JSONException ignored){}event("native-assistant",d);}public void configured(){event("native-ai-config",json("configured",assistant.configured()));}});
   web.addJavascriptInterface(new Bridge(),"Android");
-  tts=new TextToSpeech(this,status->{ttsReady=status==TextToSpeech.SUCCESS;if(ttsReady){int available=tts.setLanguage(Locale.forLanguageTag("en-IN"));if(available<0)tts.setLanguage(Locale.ENGLISH);tts.setSpeechRate(.9f);}});
+  tts=new TextToSpeech(this,status->{ttsReady=status==TextToSpeech.SUCCESS;if(ttsReady){int available=tts.setLanguage(Locale.forLanguageTag("en-IN"));if(available<0)available=tts.setLanguage(Locale.ENGLISH);ttsReady=available>=0;tts.setSpeechRate(.9f);}});
   tts.setOnUtteranceProgressListener(new UtteranceProgressListener(){public void onStart(String id){speaking=true;}public void onDone(String id){finishSpeech(false);}public void onError(String id){finishSpeech(true);}});
   menuDate=getIntent().getStringExtra("menuDate");if(menuDate==null)menuDate="";web.loadUrl(APP_URL);ReminderReceiver.scheduleNext(this);
  }
@@ -62,6 +62,7 @@ public class MainActivity extends Activity {
  }
  private void startHandsfree(){
   if(!active)return;
+  if(!ttsReady||!SpeechRecognizer.isRecognitionAvailable(this)){message("Hands-free needs your phone’s speech recognition and an English text-to-speech voice. Check Android speech settings, then try again.");return;}
   if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},11);return;}
   if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},11);return;}
   if(!getSystemService(NotificationManager.class).areNotificationsEnabled()){message("Enable notifications so you can see and stop the listening session.");return;}

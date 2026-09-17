@@ -26,8 +26,13 @@ public class HandsFreeTest {
    for(int i=0;i<80&&!HandsFreeService.status().contains("Say Hey Kutty");i++)Thread.sleep(250);
    assertTrue("Service planner must load: "+HandsFreeService.status(),HandsFreeService.status().contains("Say Hey Kutty"));
    app.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);Thread.sleep(1000);assertTrue("Service survives activity backgrounding",HandsFreeService.running());
+   inst.getUiAutomation().executeShellCommand("input keyevent 223").close();Thread.sleep(1000);
+   assertFalse(((PowerManager)c.getSystemService(Context.POWER_SERVICE)).isInteractive());
+   inst.runOnMainSync(()->HandsFreeService.instance.onCommand("What can I make tomorrow?"));
+   boolean answered=false;for(int i=0;i<60;i++){org.json.JSONObject status=new org.json.JSONObject(HandsFreeService.status());if(!status.optString("lastReply").isEmpty()){answered=true;break;}Thread.sleep(250);}
+   assertTrue("Screen-off worker must answer local menu question: "+HandsFreeService.status(),answered);
    inst.runOnMainSync(()->HandsFreeService.instance.onKeyword("stop"));
    for(int i=0;i<30&&HandsFreeService.running();i++)Thread.sleep(100);assertFalse(HandsFreeService.running());
-  }finally{c.stopService(new Intent(c,HandsFreeService.class));}
+  }finally{inst.getUiAutomation().executeShellCommand("input keyevent 224").close();c.stopService(new Intent(c,HandsFreeService.class));}
  }
 }

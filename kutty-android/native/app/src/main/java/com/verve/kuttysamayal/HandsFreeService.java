@@ -21,21 +21,21 @@ public class HandsFreeService extends Service {
  static volatile String lastReason="Off";
  private final Handler main=new Handler(Looper.getMainLooper());
  private WakeListener wake;private SpeechRecognizer speech;private TextToSpeech tts;private WebView web;private AssistantClient assistant;private PowerManager.WakeLock cpu;
- private boolean ended=false,ready=false,ttsReady=false;private String phase="Starting",requestId="";private long deadline;private int turn=0;
+ private boolean ended=false,ready=false,ttsReady=false;private String phase="Starting",requestId="",lastReply="";private long deadline;private int turn=0;
  private final Runnable expire=()->finishSession("60-minute session finished");
  private final Runnable commandTimeout=()->{if(!ended&&phase.equals("Listening")){cancelSpeech();idle();}};
  private final Runnable answerTimeout=()->{if(!ended&&phase.equals("Thinking")){requestId="";say("That took too long. Please ask again.");}};
  static boolean running(){return instance!=null&&!instance.ended;}
- static String status(){HandsFreeService s=instance;JSONObject o=new JSONObject();try{o.put("active",s!=null&&!s.ended);o.put("remainingSeconds",s==null?0:Math.max(0,(s.deadline-SystemClock.elapsedRealtime())/1000));o.put("phase",s==null?lastReason:s.phase);}catch(Exception ignored){}return o.toString();}
+ static String status(){HandsFreeService s=instance;JSONObject o=new JSONObject();try{o.put("active",s!=null&&!s.ended);o.put("remainingSeconds",s==null?0:Math.max(0,(s.deadline-SystemClock.elapsedRealtime())/1000));o.put("phase",s==null?lastReason:s.phase);o.put("lastReply",s==null?"":s.lastReply);}catch(Exception ignored){}return o.toString();}
  @Override public IBinder onBind(Intent i){return null;}
  @Override public int onStartCommand(Intent intent,int flags,int id){
   if(intent==null||STOP.equals(intent.getAction())){finishSession("Hands-free stopped");return START_NOT_STICKY;}
   if(instance==this)return START_NOT_STICKY;
-  instance=this;deadline=SystemClock.elapsedRealtime()+DURATION;
+  getSharedPreferences("handsfree_chat",MODE_PRIVATE).edit().clear().apply();instance=this;deadline=SystemClock.elapsedRealtime()+DURATION;
   try{channel();if(Build.VERSION.SDK_INT>=29)startForeground(72,notification("Starting hands-free"),ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);else startForeground(72,notification("Starting hands-free"));
    cpu=((PowerManager)getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"Kutty:HandsFree");cpu.acquire(DURATION);main.postDelayed(expire,DURATION);
    wake=new WakeListener(this,new WakeListener.Callback(){public void keyword(String word){onKeyword(word);}public void error(){finishSession("Microphone unavailable — open Kutty to try again");}});
-   tts=new TextToSpeech(this,status->{if(ended)return;ttsReady=status==TextToSpeech.SUCCESS;if(ttsReady){if(tts.setLanguage(Locale.forLanguageTag("en-IN"))<0)tts.setLanguage(Locale.ENGLISH);tts.setSpeechRate(.95f);}else finishSession("Speech output unavailable — check phone speech settings");});
+   tts=new TextToSpeech(this,status->{if(ended)return;ttsReady=status==TextToSpeech.SUCCESS;if(ttsReady){int language=tts.setLanguage(Locale.forLanguageTag("en-IN"));if(language<0)language=tts.setLanguage(Locale.ENGLISH);ttsReady=language>=0;tts.setSpeechRate(.95f);}});
    tts.setOnUtteranceProgressListener(new UtteranceProgressListener(){public void onStart(String id){}public void onDone(String id){main.post(()->{if(!ended&&id.equals(requestId)){requestId="";beginCommand();}});}public void onError(String id){main.post(()->{if(!ended)idle();});}});
    assistant=new AssistantClient(this,new AssistantClient.Callback(){public void configured(){}public void result(String id,String text,String error){event("native-assistant",json("id",id,"text",text,"error",error));}});
    startPlanner();
@@ -67,7 +67,7 @@ public class HandsFreeService extends Service {
  void onCommand(String text){if(!live())return;if(stopCommand(text)){finishSession("Hands-free stopped");return;}if(text.trim().isEmpty()){idle();return;}phase("Thinking");wake.start();turn++;String id=String.valueOf(turn);requestId=id;event("handsfree-command",json("text",text.substring(0,Math.min(text.length(),3000)),"id",id));main.postDelayed(answerTimeout,65000);}
  private void cancelSpeech(){main.removeCallbacks(commandTimeout);if(speech!=null){speech.cancel();speech.destroy();speech=null;}}
  private void idle(){if(!live())return;main.removeCallbacks(answerTimeout);requestId="";phase("Say Hey Kutty");wake.start();}
- private void say(String text){if(!live())return;main.removeCallbacks(answerTimeout);if(!ttsReady){idle();return;}phase("Speaking");wake.start();requestId="speech-"+(++turn);if(tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,requestId)==TextToSpeech.ERROR)idle();}
+ private void say(String text){if(!live())return;main.removeCallbacks(answerTimeout);lastReply=text;if(!ttsReady){idle();getSystemService(NotificationManager.class).notify(72,new Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_launcher).setContentTitle("Kutty reply · voice output unavailable").setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(PendingIntent.getActivity(this,72,new Intent(this,MainActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE)).setOngoing(true).addAction(new Notification.Action.Builder(null,"Stop",PendingIntent.getService(this,73,new Intent(this,HandsFreeService.class).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE)).build()).build());return;}phase("Speaking");wake.start();requestId="speech-"+(++turn);if(tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,requestId)==TextToSpeech.ERROR)idle();}
  private JSONObject json(String...pairs){JSONObject o=new JSONObject();try{for(int i=0;i<pairs.length;i+=2)o.put(pairs[i],pairs[i+1]);}catch(Exception ignored){}return o;}
  private void event(String name,JSONObject body){main.post(()->{if(live()&&web!=null)web.evaluateJavascript("window.dispatchEvent(new CustomEvent("+JSONObject.quote(name)+",{detail:"+body+"}))",null);});}
  private void startPlanner(){web=new WebView(this);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);
