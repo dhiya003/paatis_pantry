@@ -18,6 +18,7 @@ public class HandsFreeService extends Service {
  static final String STOP="com.verve.kuttysamayal.STOP_HANDSFREE",CHANNEL="kutty_handsfree";
  static final long DURATION=60*60*1000L;
  static volatile HandsFreeService instance;
+ static volatile String lastReason="Off";
  private final Handler main=new Handler(Looper.getMainLooper());
  private WakeListener wake;private SpeechRecognizer speech;private TextToSpeech tts;private WebView web;private AssistantClient assistant;private PowerManager.WakeLock cpu;
  private boolean ended=false,ready=false,ttsReady=false;private String phase="Starting",requestId="";private long deadline;private int turn=0;
@@ -25,7 +26,7 @@ public class HandsFreeService extends Service {
  private final Runnable commandTimeout=()->{if(!ended&&phase.equals("Listening")){cancelSpeech();idle();}};
  private final Runnable answerTimeout=()->{if(!ended&&phase.equals("Thinking")){requestId="";say("That took too long. Please ask again.");}};
  static boolean running(){return instance!=null&&!instance.ended;}
- static String status(){HandsFreeService s=instance;JSONObject o=new JSONObject();try{o.put("active",s!=null&&!s.ended);o.put("remainingSeconds",s==null?0:Math.max(0,(s.deadline-SystemClock.elapsedRealtime())/1000));o.put("phase",s==null?"Off":s.phase);}catch(Exception ignored){}return o.toString();}
+ static String status(){HandsFreeService s=instance;JSONObject o=new JSONObject();try{o.put("active",s!=null&&!s.ended);o.put("remainingSeconds",s==null?0:Math.max(0,(s.deadline-SystemClock.elapsedRealtime())/1000));o.put("phase",s==null?lastReason:s.phase);}catch(Exception ignored){}return o.toString();}
  @Override public IBinder onBind(Intent i){return null;}
  @Override public int onStartCommand(Intent intent,int flags,int id){
   if(intent==null||STOP.equals(intent.getAction())){finishSession("Hands-free stopped");return START_NOT_STICKY;}
@@ -72,6 +73,7 @@ public class HandsFreeService extends Service {
  private void startPlanner(){web=new WebView(this);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);
   WebViewAssetLoader loader=new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
   web.setWebViewClient(new WebViewClient(){@Override public WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest r){WebResourceResponse local=loader.shouldInterceptRequest(r.getUrl());return local!=null?local:new WebResourceResponse("text/plain","UTF-8",403,"Blocked",new HashMap<>(),new ByteArrayInputStream(new byte[0]));}@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){return true;}});
+  web.setWebChromeClient(new WebChromeClient(){@Override public boolean onConsoleMessage(ConsoleMessage m){if(m.messageLevel()==ConsoleMessage.MessageLevel.ERROR)android.util.Log.e("KuttyHF","Planner script error at "+m.sourceId()+":"+m.lineNumber());return true;}});
   web.addJavascriptInterface(new PlannerBridge(),"Android");web.loadUrl("https://appassets.androidplatform.net/assets/handsfree.html");main.postDelayed(()->{if(!ended&&!ready)finishSession("Hands-free planner could not load");},20000);
  }
  class PlannerBridge {
@@ -85,6 +87,6 @@ public class HandsFreeService extends Service {
   @JavascriptInterface public String readConversation(){return getSharedPreferences("handsfree_chat",MODE_PRIVATE).getString("messages","");}
   @JavascriptInterface public boolean writeConversation(String value){if(ended||value.length()>2000000)return false;try{new JSONArray(value);}catch(Exception e){return false;}return getSharedPreferences("handsfree_chat",MODE_PRIVATE).edit().putString("messages",value).commit();}
  }
- private void finishSession(String reason){if(ended)return;ended=true;phase="Off";main.removeCallbacksAndMessages(null);cancelSpeech();if(assistant!=null)assistant.destroy();if(wake!=null)wake.close();if(tts!=null){tts.stop();tts.shutdown();}if(cpu!=null&&cpu.isHeld())cpu.release();if(web!=null){web.removeJavascriptInterface("Android");web.destroy();web=null;}getSharedPreferences("handsfree_chat",MODE_PRIVATE).edit().clear().apply();if(instance==this)instance=null;stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
+ private void finishSession(String reason){if(ended)return;ended=true;phase="Off";lastReason=reason;android.util.Log.i("KuttyHF",reason);main.removeCallbacksAndMessages(null);cancelSpeech();if(assistant!=null)assistant.destroy();if(wake!=null)wake.close();if(tts!=null){tts.stop();tts.shutdown();}if(cpu!=null&&cpu.isHeld())cpu.release();if(web!=null){web.removeJavascriptInterface("Android");web.destroy();web=null;}getSharedPreferences("handsfree_chat",MODE_PRIVATE).edit().clear().apply();if(instance==this)instance=null;stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
  @Override public void onDestroy(){finishSession("Hands-free stopped");super.onDestroy();}
 }

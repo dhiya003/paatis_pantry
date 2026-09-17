@@ -24,7 +24,7 @@ public class HandsFreeTest {
    for(int i=0;i<60&&!HandsFreeService.running();i++)Thread.sleep(100);
    assertTrue(HandsFreeService.running());
    for(int i=0;i<80&&!HandsFreeService.status().contains("Say Hey Kutty");i++)Thread.sleep(250);
-   assertTrue("Service planner must load",HandsFreeService.status().contains("Say Hey Kutty"));
+   assertTrue("Service planner must load: "+HandsFreeService.status(),HandsFreeService.status().contains("Say Hey Kutty"));
    app.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);Thread.sleep(1000);assertTrue("Service survives activity backgrounding",HandsFreeService.running());
    inst.runOnMainSync(()->HandsFreeService.instance.onKeyword("stop"));
    for(int i=0;i<30&&HandsFreeService.running();i++)Thread.sleep(100);assertFalse(HandsFreeService.running());
