@@ -1,0 +1,23 @@
+name: Kutty wake acoustic checks
+on:
+  push:
+    branches: [kutty-samayal-android]
+    paths: ['kutty-android/scripts/wake-acoustic-check.py', '.github/workflows/kutty-wake-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acoustic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y espeak-ng
+      - run: python3 -m pip install sherpa-onnx==1.13.8 sentencepiece==0.2.1 numpy
+      - run: python3 scripts/wake-acoustic-check.py
+        working-directory: kutty-android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wake-acoustic-results
+          path: kutty-android/wake-acoustic-results.json
