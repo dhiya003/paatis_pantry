@@ -32,11 +32,12 @@ public class AppSmokeTest {
  String seed="{\"version\":1,\"onboarded\":true,\"profile\":{\"name\":\"Test baby\",\"dob\":\"2024-01-01\",\"anchor\":\"2026-09-16\",\"allergies\":[]},\"rules\":{},\"overrides\":{},\"kitchen\":{\"pantry\":[],\"favourites\":[],\"locks\":[],\"prepDone\":[]},\"changes\":{},\"removedIds\":[]}";
  ReminderReceiver.prefs(c).edit().clear().putString("state",seed).commit();
  try(ActivityScenario<MainActivity> app=ActivityScenario.launch(MainActivity.class)){
- boolean ready=false;for(int i=0;i<40;i++){if(evaluate(app,"document.body.innerText.includes('A happy little mealtime')").equals("true")){ready=true;break;}Thread.sleep(500);}assertTrue(ready);
+ boolean ready=false;for(int i=0;i<40;i++){if(evaluate(app,"!!document.querySelector('.home-screen .meal-grid')").equals("true")){ready=true;break;}Thread.sleep(500);}assertTrue(ready);
+ evaluate(app,"document.querySelector('[data-sidebar=trigger]').click()");Thread.sleep(300);
  evaluate(app,"Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='My dish list').click()");Thread.sleep(500);
  assertEquals("true",evaluate(app,"document.body.innerText.includes('Save my dish list')"));
  app.onActivity(a->a.onBackPressed());Thread.sleep(500);
- assertEquals("true",evaluate(app,"document.body.innerText.includes('A happy little mealtime')"));
+ assertEquals("true",evaluate(app,"!!document.querySelector('.home-screen .meal-grid')"));
  evaluate(app,"document.querySelector('.meal-title').click()");Thread.sleep(500);
  assertEquals("true",evaluate(app,"!!document.querySelector('[role=dialog]')"));app.onActivity(a->a.onBackPressed());Thread.sleep(500);
  assertEquals("false",evaluate(app,"!!document.querySelector('[role=dialog]')"));
