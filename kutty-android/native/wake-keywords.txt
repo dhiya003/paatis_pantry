@@ -1,0 +1,5 @@
+HH EY1 K AH1 T IY0 :1.5 #0.2 @hey_kutty
+HH EY1 K UH1 T IY0 :1.5 #0.2 @hey_kutty
+HH EY1 K UW1 T IY0 :1.5 #0.2 @hey_kutty
+S T AA1 P :1.5 #0.2 @stop
+S T AO1 P :1.5 #0.2 @stop

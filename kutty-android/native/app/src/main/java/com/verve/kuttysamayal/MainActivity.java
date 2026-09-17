@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
   try{startForegroundService(new Intent(this,HandsFreeService.class));}catch(Exception e){message("Could not start hands-free. Keep the app open and try again.");}
  }
  class Bridge {
+  @JavascriptInterface public void handsfreeSpeakNow(){runOnUiThread(()->{if(HandsFreeService.running())HandsFreeService.instance.listenNow();});}
   @JavascriptInterface public String handsfreeStatus(){return HandsFreeService.status();}
   @JavascriptInterface public void startHandsfree(){runOnUiThread(MainActivity.this::startHandsfree);}
   @JavascriptInterface public void stopHandsfree(){runOnUiThread(()->{stopService(new Intent(MainActivity.this,HandsFreeService.class));event("native-resume",new JSONObject());});}

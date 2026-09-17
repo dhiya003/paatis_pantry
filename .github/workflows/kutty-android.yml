@@ -40,8 +40,9 @@ jobs:
           node scripts/ui-check.cjs
       - name: Bundle local wake-word engine
         run: |
-          python3 -m pip install sentencepiece==0.2.1
+          python3 -m pip install sherpa-onnx==1.13.8 piper-tts==1.4.2 numpy==2.2.6
           python3 scripts/prepare-wake.py
+          python3 scripts/wake-acoustic-check.py
       - name: Build installable APK and Android tests
         run: gradle -p native testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon
       - name: Upload installable APK
@@ -80,4 +81,5 @@ jobs:
             kutty-android/android-preview.png
             kutty-android/ui-*.png
             kutty-android/package-lock.json
+            kutty-android/wake-acoustic-results.json
           retention-days: 14

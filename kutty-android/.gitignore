@@ -5,3 +5,9 @@ native/**/build/
 native/app/src/main/assets/
 native/local.properties
 android-preview.png
+
+# Build-only synthetic audio regression fixtures and TTS models
+wake-test-voices/
+wake-fixtures/
+wake-acoustic-results.json
+native/app/src/androidTest/assets/wake-tests/
