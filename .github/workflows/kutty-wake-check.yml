@@ -20,4 +20,6 @@ jobs:
         if: always()
         with:
           name: wake-acoustic-results
-          path: kutty-android/wake-acoustic-results.json
+          path: |
+            kutty-android/wake-acoustic-results.json
+            kutty-android/wake-fixtures

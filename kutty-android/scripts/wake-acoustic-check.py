@@ -13,16 +13,20 @@ p=work/model
 sp=spm.SentencePieceProcessor(model_file=str(p/'bpe.model'))
 variants={
  'original':[('HEY KUTTY','hey_kutty',1.5,.35),('STOP','stop',1.5,.35)],
+ 'sensitive':[('HEY KUTTY','hey_kutty',4,.1),('HEY CUTTY','hey_kutty',4,.1),('HEY CUTIE','hey_kutty',4,.1),('HEY KITTY','hey_kutty',4,.1),('STOP','stop',1.5,.35)],
  'phonetic':[('HEY KUTTY','hey_kutty',2,.25),('HEY CUTTY','hey_kutty',2,.25),('HEY CUTIE','hey_kutty',2,.25),('HEY KITTY','hey_kutty',2,.25),('STOP','stop',1.5,.35)]
 }
 reports=[]
+fixtures=Path('wake-fixtures');fixtures.mkdir(exist_ok=True)
+import shutil
+shutil.copyfile(p/'bpe.model',fixtures/'bpe.model')
 for variant,words in variants.items():
  keywords=work/f'{variant}.txt'
  keywords.write_text('\n'.join(' '.join(sp.encode(text,out_type=str))+f' :{score} #{threshold} @{label}' for text,label,score,threshold in words)+'\n')
  kws=sherpa_onnx.KeywordSpotter(tokens=str(p/'tokens.txt'),encoder=str(p/'encoder-epoch-12-avg-2-chunk-16-left-64.onnx'),decoder=str(p/'decoder-epoch-12-avg-2-chunk-16-left-64.onnx'),joiner=str(p/'joiner-epoch-12-avg-2-chunk-16-left-64.onnx'),num_threads=1,keywords_file=str(keywords))
  for voice in ['en-us','en-gb','en-sc']:
   for phrase in ['hey kutty','hey cutty','stop','hello there','what can I cook tomorrow','the kettle is ready','please cut the carrot']:
-   wav=work/'speech.wav';subprocess.run(['espeak-ng','-v',voice,'-s','155','-w',str(wav),phrase],check=True)
+   wav=fixtures/(voice+'-'+phrase.replace(' ','_')+'.wav');subprocess.run(['espeak-ng','-v',voice,'-s','155','-w',str(wav),phrase],check=True)
    with wave.open(str(wav)) as w:
     assert w.getnchannels()==1 and w.getsampwidth()==2
     rate=w.getframerate();audio=np.frombuffer(w.readframes(w.getnframes()),dtype='<i2').astype(np.float32)/32768
